@@ -12,6 +12,5 @@ https://github.com/andrewcampey/quill-image-resize-module
 
 # How to build:
 npm install
-npm install webpack webpack-cli --save-dev  # Don't know if this is really necessary
-sudo apt install webpack
+sudo apt install webpack  # If not installed already
 webpack -p --progress --colors  # -p is for uglifying

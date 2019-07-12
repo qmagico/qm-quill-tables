@@ -1,62 +1,90 @@
-import IconAlignLeft from 'quill/assets/icons/align-left.svg';
-import IconAlignCenter from 'quill/assets/icons/align-center.svg';
-import IconAlignRight from 'quill/assets/icons/align-right.svg';
-import IconUndo from 'quill/assets/icons/undo.svg'
-import IconRedo from 'quill/assets/icons/redo.svg'
+import IconDeleteCells from 'quill/assets/icons/table-delete-cells.svg'
+import IconDeleteRows from 'quill/assets/icons/table-delete-rows.svg'
+import IconDeleteColumns from 'quill/assets/icons/table-delete-columns.svg'
+import IconInsertRows from 'quill/assets/icons/table-insert-rows.svg'
+import IconInsertColumns from 'quill/assets/icons/table-insert-columns.svg'
 import Delta from 'quill-delta';
 
 import { BaseModule } from './BaseModule';
 
-const classAttributor = window.Quill.imports.parchment.ClassAttributor;
-
-const RotateImageClass = new classAttributor('class', 'rot');
-
 export class Toolbar extends BaseModule {
-	rotation = 0;
-
-    onCreate = () => {
-    	if (this.img.classList[0] == 'rot-90rotate') this.rotation = 90;
-		else if (this.img.classList[0] == 'rot-180rotate') this.rotation = 180;
-		else if (this.img.classList[0] == 'rot-minus90rotate') this.rotation = -90;
+    onCreate = (that) => {
+    	this.quill = that.quill;
+    	this.parentModule = that;
 		// Setup Toolbar
         this.toolbar = document.createElement('div');
         Object.assign(this.toolbar.style, this.options.toolbarStyles);
-        this.overlay.appendChild(this.toolbar);
+        this.quill.root.parentNode.appendChild(this.toolbar);
+        this.onUpdate();
 
         // Setup Buttons
-        this._definerotations();
+        this._definebuttons();
         this._addToolbarButtons();
+
+        this.table_functions = this.quill.getModule('table');
     };
 
 	// The toolbar and its children will be destroyed when the overlay is removed
-    onDestroy = () => {};
+    onDestroy = () => {
+    	this.toolbar.remove();
+    };
 
 	// Nothing to update on drag because we are are positioned relative to the overlay
-    onUpdate = () => {};
+    onUpdate = () => {
+    	if (!this.table || this.table.rows.length === 0) {
+    		this.parentModule.hide();
+    		return;
+    	}
 
-    _definerotations = () => {
-		this.rotationvalue = '';
+    	const parent = this.quill.root.parentNode;
+    	this.toolbar.style.top = this.table.getBoundingClientRect().top -
+    		this.quill.root.parentNode.getBoundingClientRect().top - 30  +
+    		parent.scrollTop + 'px';
+    	if (parseInt(this.toolbar.style.top) < 0) {
+    		this.toolbar.style.top = 0;
+    	}
+    };
 
-        this.rotations = [
+    _definebuttons = () => {
+        this.buttons = [
 			{
-				name: 'rotate-left',
-				icon: IconUndo,
+				name: 'insert-row',
+				icon: IconInsertRows,
                 apply: () => {
-					this.rotationvalue = this._setRotation('left');
-
-					// Adds a class of rot-<<rotationvalue>>
-					RotateImageClass.add(this.img, this.rotationvalue);
+					this.table_functions.insertRowBelow();
                 },
                 isApplied: () => { },
 			},
 			{
-				name: 'rotate-right',
-                icon: IconRedo,
+				name: 'delete-row',
+                icon: IconDeleteRows,
                 apply: () => {
-					this.rotationvalue = this._setRotation('right');
-
-					// Adds a class of img-<<rotationvalue>>
-					RotateImageClass.add(this.img, this.rotationvalue);
+					this.table_functions.deleteRow();
+                },
+                isApplied: () => { },
+			},
+			{
+				name: 'insert-column',
+                icon: IconInsertColumns,
+                apply: () => {
+					this.table_functions.insertColumnRight();
+                },
+                isApplied: () => { },
+			},
+			{
+				name: 'delete-column',
+                icon: IconDeleteColumns,
+                apply: () => {
+					this.table_functions.deleteColumn();
+                },
+                isApplied: () => { },
+			},
+			{
+				name: 'delete-cells',
+                icon: IconDeleteCells,
+                apply: () => {
+					this.table_functions.deleteTable();
+					this.table = undefined;
                 },
                 isApplied: () => { },
 			},
@@ -66,15 +94,15 @@ export class Toolbar extends BaseModule {
 
     _addToolbarButtons = () => {
 		const buttons = [];
-		this.rotations.forEach((rot, idx) => {
+		this.buttons.forEach((button_def, idx) => {
 			const button = document.createElement('span');
-			button.setAttribute('title', rot.name);
+			button.setAttribute('title', button_def.name);
 			buttons.push(button);
-			button.innerHTML = rot.icon;
+			button.innerHTML = button_def.icon;
 			button.addEventListener('click', () => {
-				//this._selectButton(button);
-				rot.apply();
-				// image may change position; redraw drag handles
+				this._selectButton(button, true);
+				this.quill.focus();
+				button_def.apply();
 				this.requestUpdate();
 			});
 			Object.assign(button.style, this.options.toolbarButtonStyles);
@@ -82,60 +110,20 @@ export class Toolbar extends BaseModule {
 				button.style.borderLeftWidth = '0';
 			}
 			Object.assign(button.children[0].style, this.options.toolbarButtonSvgStyles);
-			if (rot.isApplied()) {
-				// select button if previously applied
-				this._selectButton(button);
-			}
+			// if (button_def.isApplied()) {
+			// 	// select button if previously applied
+			// 	this._selectButton(button);
+			// }
 			this.toolbar.appendChild(button);
 		});
     };
 
-    _selectButton = (button) => {
-		if ((button.title != 'rotate-left') && (button.title != 'rotate-right')) {
-			button.style.filter = 'invert(20%)';
+    _selectButton = (button, auto_revert) => {
+		button.style.filter = 'invert(20%)';
+		if (auto_revert) {
+			setTimeout(function(){
+				button.style.filter = '';
+			}, 100);
 		}
 	};
-
-	_setRotation(direction) {
-		if (this.rotation == 0 && direction == 'left') {
-			this.rotation = -90;
-			return 'minus90rotate';
-		} else if (this.rotation == -90 && direction == 'left') {
-			this.rotation = 180;
-			return '180rotate';
-		} else if (this.rotation == 180 && direction == 'left') {
-			this.rotation = 90;
-			return '90rotate';
-		} else if (this.rotation == 90 && direction == 'left') {
-			this.rotation = 0;
-			return 'zerorotate';
-		} else if (this.rotation == 0 && direction == 'right') {
-			this.rotation = 90;
-			return '90rotate';
-		} else if (this.rotation == 90 && direction == 'right') {
-			this.rotation = 180;
-			return '180rotate';
-		} else if (this.rotation == 180 && direction == 'right') {
-			this.rotation = -90;
-			return 'minus90rotate';
-		} else if (this.rotation == -90 && direction == 'right') {
-			this.rotation = 0;
-			return '';
-		} else {
-			return '';
-		}
-	}
-
-	setUserSelect(value) {
-		[
-		  'userSelect',
-		  'mozUserSelect',
-		  'webkitUserSelect',
-		  'msUserSelect'
-		].forEach(prop => {
-		  // set on contenteditable element and <html>
-		  this.quill.root.style[prop] = value;
-		  document.documentElement.style[prop] = value;
-		});
-	  }
 }
